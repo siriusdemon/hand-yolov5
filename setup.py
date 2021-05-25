@@ -5,20 +5,20 @@ with open("README.md", 'r') as f:
 
 
 setuptools.setup(
-    name = "pcn",
-    version = "0.1.0",
+    name = "handdet",
+    version = "1.0.0",
     author = "sirius demon",
     author_email = "mory2016@126.com",
-    description="PCN in Pytorch",
+    description="handdet using yolov5",
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url = "https://github.com/siriusdemon/pytorch-pcn",
+    url = "https://github.com/siriusdemon/hand-yolov5",
     packages=setuptools.find_packages(),
     package_data = {
-        'pcn': ['pth/*.pth'],
+        'handdet': ['checkpoints/best_sd.pt'],
     },
     classifiers = [
-        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
     ],
