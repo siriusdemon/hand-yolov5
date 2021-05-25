@@ -28,7 +28,7 @@ class opt:
 
 model = yolo.Model(opt.cfgfile)
 model.load_state_dict(torch.load(opt.weights, map_location=opt.device))
-model.float().eval()
+model.float().to(opt.device).eval()
 # ----------------------------------------------------------------------
 
 
