@@ -38,7 +38,7 @@ def process(video_path):
     crop_dir = osp.join(base, osp.basename(video_path).split('.')[0])
     os.makedirs(crop_dir, exist_ok=True)
 
-    # Step3 + Step4 + Step5
+    # Step4 + Step5
     def extend_box(box):
         # add more background to enable better classify
         left, top, right, bottom = box
@@ -49,9 +49,20 @@ def process(video_path):
         right = right + w // 6
         bottom = bottom + h // 6
         return left, top, right, bottom
+    # set a mini batch 
+    res = []
+    batch = 16
+    total = len(frames)
+    times = total // batch
+    if total % batch > 0: times += 1
+    for i in range(times):
+        s = i * batch
+        e = min(s + batch, total)
+        frs = frames[s:e]
+        rs = handdet.detect_many(frames)
+        res += rs
 
     CONF = 0.3
-    res = handdet.detect_many(frames)
     for i, (frame, det) in enumerate(zip(frames, res)):
         det = [d for d in det if d['conf'] >= CONF]
         for d in det: d['bbox'] = extend_box(d['bbox'])
