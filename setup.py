@@ -15,7 +15,7 @@ setuptools.setup(
     url = "https://github.com/siriusdemon/hand-yolov5",
     packages=setuptools.find_packages(),
     package_data = {
-        'handdet': ['checkpoints/best_sd.pt'],
+        'handdet': ['checkpoints/best_sd.pt', 'hand_labels.txt'],
     },
     classifiers = [
         "Programming Language :: Python :: 3",
