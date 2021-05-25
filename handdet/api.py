@@ -8,6 +8,8 @@ from .models import yolo
 from .utils.datasets import letterbox
 from .utils.general import check_img_size, non_max_suppression, scale_coords
 
+
+# labels and models
 base = osp.dirname(__file__)
 names = open(osp.join(base, 'hand_labels.txt'), 'r', encoding='utf-8').read().strip().split()
 
@@ -24,57 +26,67 @@ class opt:
     agnostic_nms = False
     augment = False
 
-
 model = yolo.Model(opt.cfgfile)
 model.load_state_dict(torch.load(opt.weights, map_location=opt.device))
 model.float().eval()
+# ----------------------------------------------------------------------
 
-def detect(img):
-    if type(img) == str:
-        img = cv2.imread(img)
-    opt.source = img
-    return _detect()
 
-def _detect():
-    global model
-    global names
-    source, weights, imgsz = opt.source, opt.weights,  opt.img_size
+def load_images(ims):
+    new_ims = []
+    shapes = []
+    for im in ims:
+        im = letterbox(im, new_shape=opt.img_size)[0]
+        im = im[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+        im = np.asarray(im, dtype=np.float32)
+        im /= 255.0  #
+        new_ims.append(im)
+        shapes.append(im.shape[1:])
+    new_ims = np.stack(new_ims)
+    new_ims = torch.from_numpy(new_ims).to(opt.device)
+    return new_ims, shapes
 
-    # Load model
-    imgsz = check_img_size(imgsz, s=model.stride.max())  # check img_size
-
-    # Run inference
-    device = opt.device
-    img = letterbox(source, new_shape=opt.img_size)[0]
-    img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
-    img = np.ascontiguousarray(img)
-    img = torch.from_numpy(img).to(device)
-    img = img.float()
-    img /= 255.0  #
-    if img.ndimension() == 3:
-        img = img.unsqueeze(0)
-
-    # Inference
+def forward(ims):
+    # ims: torch.tensor
     with torch.no_grad():
-        pred = model(img, augment=opt.augment)[0]
+        preds, _ = model(ims, augment=opt.augment)
+    return preds
 
-    # Apply NMS
-    pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
-
-    # Process detections
-    for i, det in enumerate(pred):  # detections per image
-        im0 = source
+def postprocess(ims, shapes, preds):
+    """Apply NMS and rescale bbox to original size
+    Args:
+        ims: original image returned by cv2.imread 
+        shapes: shape after letterbox
+        preds: predictions
+    """
+    all_results = []
+    preds = non_max_suppression(preds, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
+    im0 = ims[0]
+    shape = shapes[0]
+    for i, det in enumerate(preds):  # detections per image
+        res = []
         gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
         if len(det):
-            det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
+            det[:, :4] = scale_coords(shape, det[:, :4], im0.shape).round()
         det = det.numpy().tolist()
-        res = []
         for *box, conf, cls_id in det:
             bbox = list(map(int, box))
             cls_name = names[int(cls_id)]
             d = {'class': cls_name, 'bbox': bbox, "conf": conf}
             res.append(d)
-        return res
+        all_results.append(res)
+    return all_results
+
+
+def detect_many(ims):
+    # NOTE: ims should have the same shape
+    new_ims, shapes = load_images(ims)
+    preds = forward(new_ims)
+    results = postprocess(ims, shapes, preds)
+    return results
+
+def detect(im):
+    return detect_many([im])[0]
 
 def visualize(im, dets):
     if type(im) == str:
