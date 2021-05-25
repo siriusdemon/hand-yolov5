@@ -34,17 +34,15 @@ model.float().eval()
 
 def load_images(ims):
     new_ims = []
-    shapes = []
     for im in ims:
         im = letterbox(im, new_shape=opt.img_size)[0]
         im = im[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
         im = np.asarray(im, dtype=np.float32)
         im /= 255.0  #
         new_ims.append(im)
-        shapes.append(im.shape[1:])
     new_ims = np.stack(new_ims)
     new_ims = torch.from_numpy(new_ims).to(opt.device)
-    return new_ims, shapes
+    return new_ims
 
 def forward(ims):
     # ims: torch.tensor
@@ -52,22 +50,20 @@ def forward(ims):
         preds, _ = model(ims, augment=opt.augment)
     return preds
 
-def postprocess(ims, shapes, preds):
+def postprocess(old_shape, new_shape, preds):
     """Apply NMS and rescale bbox to original size
     Args:
-        ims: original image returned by cv2.imread 
-        shapes: shape after letterbox
+        old_shape: im.shape[:2]
+        new_shape: shape after letterbox
         preds: predictions
     """
     all_results = []
     preds = non_max_suppression(preds, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
-    im0 = ims[0]
-    shape = shapes[0]
     for i, det in enumerate(preds):  # detections per image
         res = []
-        gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+        gn = torch.tensor(old_shape)[[1, 0, 1, 0]]  # normalization gain whwh
         if len(det):
-            det[:, :4] = scale_coords(shape, det[:, :4], im0.shape).round()
+            det[:, :4] = scale_coords(new_shape[1:], det[:, :4], old_shape).round()
         det = det.numpy().tolist()
         for *box, conf, cls_id in det:
             bbox = list(map(int, box))
@@ -80,63 +76,28 @@ def postprocess(ims, shapes, preds):
 
 def detect_many(ims):
     # NOTE: ims should have the same shape
-    new_ims, shapes = load_images(ims)
+    new_ims = load_images(ims)
     preds = forward(new_ims)
-    results = postprocess(ims, shapes, preds)
+    results = postprocess(ims[0].shape, new_ims[0].shape, preds)
     return results
 
 def detect(im):
     return detect_many([im])[0]
 
+def crop(im, dets):
+    for (i, d) in enumerate(dets):
+        box = d['bbox']
+        left, top = box[0], box[1]
+        right, bottom = box[2], box[3]
+        crop = im[top:bottom, left:right]
+        yield crop
+
 def visualize(im, dets):
-    if type(im) == str:
-        im = cv2.imread(im)
     im_h, im_w = im.shape[:2]
     for d in dets:
         box = d['bbox']
         left, top = box[0], box[1]
         right, bottom = box[2], box[3]
         cv2.rectangle(im, (left,top), (right,bottom), (0,234,242), 2)
+        cv2.putText(im, str(round(d['conf'], 2)), (left, top), 1, 1, (0, 200, 210), 1)
     return im
-
-def crop(impath, dets):
-    im = cv2.imread(impath)
-    for (i, d) in enumerate(dets):
-        box = d['bbox']
-        left, top = box[0], box[1]
-        right, bottom = box[2], box[3]
-        crop = im[top:bottom, left:right]
-        cv2.imwrite(f"test_{i}.png", crop)
-
-def demo():
-    import sys
-    if len(sys.argv) > 1:
-        name = sys.argv[1]
-    else:
-        name = "zz.jpeg"
-    dets = detect(name)
-    print(dets)
-    visualize(name, dets)
-
-def video():
-    import sys
-    if len(sys.argv) > 1:
-        name = sys.argv[1]
-    else:
-        name = "test.mp4"
-    cam = cv2.VideoCapture(name)
-    ret, frame = cam.read()
-    while ret:
-        t = time.time()
-        dets = detect(frame)
-        print("detect cost: ", time.time() -t)
-        frame = visualize(frame, dets)
-        cv2.imshow('camera', frame)
-        # Display the resulting frame
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-        ret, frame = cam.read()
-    cv2.destroyAllWindows()
-
-if __name__ == '__main__':
-    video()
