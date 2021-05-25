@@ -64,7 +64,7 @@ def postprocess(old_shape, new_shape, preds):
         gn = torch.tensor(old_shape)[[1, 0, 1, 0]]  # normalization gain whwh
         if len(det):
             det[:, :4] = scale_coords(new_shape[1:], det[:, :4], old_shape).round()
-        det = det.numpy().tolist()
+        det = det.to('cpu').numpy().tolist()
         for *box, conf, cls_id in det:
             bbox = list(map(int, box))
             cls_name = names[int(cls_id)]
