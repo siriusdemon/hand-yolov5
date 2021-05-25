@@ -16,9 +16,9 @@ class opt:
     cfgfile = osp.join(base, 'models/yolov5s.yaml')
     source = 'None'
     img_size = 640
-    conf_thres = 0.35
+    conf_thres = 0.15
     iou_thres = 0.45
-    device = 'cpu'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     view_img = True
     classes = None
     agnostic_nms = False
